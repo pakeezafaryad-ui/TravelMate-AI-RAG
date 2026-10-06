@@ -1,15 +1,10 @@
-
 import streamlit as st
 import chromadb
+import requests
 from groq import Groq
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-
-# ============================================================
-# PAGE CONFIG
-# ============================================================
 
 st.set_page_config(
     page_title="TravelMate AI",
@@ -17,14 +12,11 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
+# -----------------------------
 # CUSTOM CSS
-# ============================================================
-
+# -----------------------------
 st.markdown("""
 <style>
-
 .main {
     padding-top: 1rem;
 }
@@ -33,11 +25,7 @@ st.markdown("""
     padding: 25px;
     border-radius: 18px;
     margin-bottom: 25px;
-    background: linear-gradient(
-        135deg,
-        #16213E,
-        #0F3460
-    );
+    background: linear-gradient(135deg, #16213E, #0F3460);
 }
 
 .hero h1 {
@@ -58,72 +46,57 @@ st.markdown("""
     margin-bottom: 15px;
 }
 
+.flight-card {
+    padding: 18px;
+    border-radius: 15px;
+    background: #F5F7FA;
+    margin-bottom: 15px;
+    border: 1px solid #D9E2EC;
+}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ============================================================
+# -----------------------------
 # HEADER
-# ============================================================
-
+# -----------------------------
 st.markdown("""
 <div class="hero">
-
 <h1>✈️ TravelMate AI</h1>
-
-<p>
-Your intelligent travel knowledge assistant
-</p>
-
+<p>Your intelligent travel knowledge assistant</p>
 </div>
 """, unsafe_allow_html=True)
 
-
-# ============================================================
-# GROQ CLIENT
-# ============================================================
-
+# -----------------------------
+# API KEYS
+# -----------------------------
 try:
-
     groq_api_key = st.secrets["GROQ_API_KEY"]
-
+    aviation_api_key = st.secrets["AVIATIONSTACK_API_KEY"]
 except Exception:
-
     st.error(
-        "GROQ_API_KEY is not configured. "
-        "Add it to Streamlit Secrets."
+        "API keys are not configured correctly. "
+        "Please check Streamlit Secrets."
     )
-
     st.stop()
 
+groq_client = Groq(api_key=groq_api_key)
 
-client = Groq(
-    api_key=groq_api_key
-)
-
-
-# ============================================================
+# -----------------------------
 # EMBEDDING MODEL
-# ============================================================
-
+# -----------------------------
 @st.cache_resource
 def load_embedding_model():
-
     return SentenceTransformer(
         "sentence-transformers/all-MiniLM-L6-v2"
     )
 
-
 embedding_model = load_embedding_model()
 
-
-# ============================================================
-# CHROMADB
-# ============================================================
-
+# -----------------------------
+# CHROMA DATABASE
+# -----------------------------
 @st.cache_resource
 def load_vector_database():
-
     chroma_client = chromadb.Client()
 
     collection = chroma_client.get_or_create_collection(
@@ -135,21 +108,199 @@ def load_vector_database():
 
 collection = load_vector_database()
 
-
-# ============================================================
+# -----------------------------
 # TEXT SPLITTER
-# ============================================================
-
+# -----------------------------
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
     chunk_overlap=50
 )
 
+# -----------------------------
+# LIVE FLIGHT FUNCTION
+# -----------------------------
+def get_live_flights():
 
-# ============================================================
+    url = "https://api.aviationstack.com/v1/flights"
+
+    params = {
+        "access_key": aviation_api_key,
+        "dep_iata": "LHE",
+        "arr_iata": "DXB"
+    }
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=20
+        )
+
+        data = response.json()
+
+        if "error" in data:
+            return {
+                "error": data["error"].get(
+                    "message",
+                    "Aviation API returned an error."
+                )
+            }
+
+        return data
+
+    except requests.RequestException as e:
+
+        return {
+            "error": f"Could not connect to flight API: {e}"
+        }
+
+# -----------------------------
+# DISPLAY LIVE FLIGHTS
+# -----------------------------
+def show_live_flights():
+
+    st.subheader("✈️ Live Lahore → Dubai Flights")
+
+    with st.spinner("Checking live flight data..."):
+
+        data = get_live_flights()
+
+    if "error" in data:
+
+        st.error(data["error"])
+
+        return
+
+    flights = data.get("data", [])
+
+    if not flights:
+
+        st.info(
+            "No current Lahore → Dubai flights were returned "
+            "by the live flight API."
+        )
+
+        return
+
+    st.caption(
+        "Live flight information provided by Aviationstack."
+    )
+
+    for flight in flights:
+
+        airline = flight.get("airline", {})
+        flight_info = flight.get("flight", {})
+        departure = flight.get("departure", {})
+        arrival = flight.get("arrival", {})
+        status = flight.get("flight_status", "Unknown")
+
+        airline_name = airline.get(
+            "name",
+            "Unknown airline"
+        )
+
+        flight_number = flight_info.get(
+            "iata",
+            flight_info.get("number", "Unknown")
+        )
+
+        departure_airport = departure.get(
+            "airport",
+            "Allama Iqbal International Airport"
+        )
+
+        arrival_airport = arrival.get(
+            "airport",
+            "Dubai International Airport"
+        )
+
+        departure_time = departure.get(
+            "scheduled",
+            "Not available"
+        )
+
+        arrival_time = arrival.get(
+            "scheduled",
+            "Not available"
+        )
+
+        departure_terminal = departure.get(
+            "terminal",
+            "Not available"
+        )
+
+        departure_gate = departure.get(
+            "gate",
+            "Not available"
+        )
+
+        arrival_terminal = arrival.get(
+            "terminal",
+            "Not available"
+        )
+
+        arrival_gate = arrival.get(
+            "gate",
+            "Not available"
+        )
+
+        st.markdown(
+            f"""
+            <div class="flight-card">
+
+            <h3>✈️ {airline_name} — Flight {flight_number}</h3>
+
+            <p><b>Status:</b> {status}</p>
+
+            <hr>
+
+            <p>
+            🛫 <b>Departure:</b> {departure_airport}<br>
+            📍 LHE — Lahore
+            </p>
+
+            <p>
+            🕐 <b>Scheduled departure:</b>
+            {departure_time}
+            </p>
+
+            <p>
+            🚪 <b>Terminal:</b>
+            {departure_terminal}
+            &nbsp;&nbsp;
+            <b>Gate:</b>
+            {departure_gate}
+            </p>
+
+            <hr>
+
+            <p>
+            🛬 <b>Arrival:</b> {arrival_airport}<br>
+            📍 DXB — Dubai
+            </p>
+
+            <p>
+            🕐 <b>Scheduled arrival:</b>
+            {arrival_time}
+            </p>
+
+            <p>
+            🚪 <b>Terminal:</b>
+            {arrival_terminal}
+            &nbsp;&nbsp;
+            <b>Gate:</b>
+            {arrival_gate}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# -----------------------------
 # SIDEBAR
-# ============================================================
-
+# -----------------------------
 with st.sidebar:
 
     st.header("📄 Travel Knowledge Base")
@@ -176,22 +327,30 @@ with st.sidebar:
 
     st.divider()
 
+    st.subheader("✈️ Live Flights")
+
+    if st.button(
+        "Check Lahore → Dubai Flights",
+        use_container_width=True
+    ):
+        show_live_flights()
+
+    st.divider()
+
     st.caption(
-        "Powered by Groq + Hugging Face + ChromaDB"
+        "Powered by Groq + Hugging Face + "
+        "ChromaDB + Aviationstack"
     )
 
-
-# ============================================================
-# PROCESS UPLOADED PDFS
-# ============================================================
-
+# -----------------------------
+# PROCESS PDF
+# -----------------------------
 if uploaded_files:
 
     for uploaded_file in uploaded_files:
 
         file_name = uploaded_file.name
 
-        # Check whether this file has already been processed
         existing = collection.get(
             where={"source": file_name}
         )
@@ -220,22 +379,18 @@ if uploaded_files:
 
                 continue
 
-            # Split document into chunks
             chunks = text_splitter.split_text(text)
 
-            # Create embeddings
             embeddings = embedding_model.encode(
                 chunks,
                 show_progress_bar=False
             ).tolist()
 
-            # Unique IDs
             ids = [
                 f"{file_name}_{i}"
                 for i in range(len(chunks))
             ]
 
-            # Metadata
             metadatas = [
                 {
                     "source": file_name,
@@ -244,7 +399,6 @@ if uploaded_files:
                 for i in range(len(chunks))
             ]
 
-            # Store in ChromaDB
             collection.upsert(
                 ids=ids,
                 documents=chunks,
@@ -262,20 +416,16 @@ if uploaded_files:
                 f"Error processing {file_name}: {e}"
             )
 
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
+# -----------------------------
+# CHAT HISTORY
+# -----------------------------
 if "messages" not in st.session_state:
 
     st.session_state.messages = []
 
-
-# ============================================================
-# WELCOME MESSAGE
-# ============================================================
-
+# -----------------------------
+# WELCOME CARD
+# -----------------------------
 if not st.session_state.messages:
 
     st.markdown("""
@@ -284,48 +434,47 @@ if not st.session_state.messages:
     <h3>👋 Welcome to TravelMate AI!</h3>
 
     <p>
-    Upload your travel PDFs from the sidebar and ask
-    questions about flights, hotels, destinations,
-    packages, policies and more.
+    Ask about travel information from your uploaded
+    documents or check live Lahore → Dubai flights
+    using the flight API.
     </p>
 
     </div>
     """, unsafe_allow_html=True)
 
-
-# ============================================================
-# DISPLAY CHAT HISTORY
-# ============================================================
-
+# -----------------------------
+# DISPLAY CHAT
+# -----------------------------
 for message in st.session_state.messages:
 
-    with st.chat_message(message["role"]):
+    with st.chat_message(
+        message["role"]
+    ):
 
-        st.markdown(message["content"])
+        st.markdown(
+            message["content"]
+        )
 
         if message.get("sources"):
 
-            with st.expander("📚 Sources"):
+            with st.expander(
+                "📚 Sources"
+            ):
 
                 for source in message["sources"]:
 
-                    st.caption(f"📄 {source}")
+                    st.caption(
+                        f"📄 {source}"
+                    )
 
-
-# ============================================================
+# -----------------------------
 # CHAT INPUT
-# ============================================================
-
+# -----------------------------
 question = st.chat_input(
     "Ask TravelMate something..."
 )
 
-
 if question:
-
-    # --------------------------------------------------------
-    # USER MESSAGE
-    # --------------------------------------------------------
 
     st.session_state.messages.append(
         {
@@ -338,12 +487,38 @@ if question:
 
         st.markdown(question)
 
+    # Detect live flight request
+    lower_question = question.lower()
 
-    # --------------------------------------------------------
-    # CHECK KNOWLEDGE BASE
-    # --------------------------------------------------------
+    live_flight_request = (
+        ("flight" in lower_question or
+         "flights" in lower_question)
+        and
+        (
+            "lahore" in lower_question
+            or "lhe" in lower_question
+        )
+        and
+        (
+            "dubai" in lower_question
+            or "dxb" in lower_question
+        )
+    )
 
-    if collection.count() == 0:
+    if live_flight_request:
+
+        with st.chat_message("assistant"):
+
+            show_live_flights()
+
+        answer = (
+            "I displayed the current Lahore → Dubai "
+            "flight information from the live Aviationstack API."
+        )
+
+        sources = ["Aviationstack Live Flight API"]
+
+    elif collection.count() == 0:
 
         answer = (
             "📄 Please upload a travel PDF first. "
@@ -352,20 +527,17 @@ if question:
 
         sources = []
 
+        with st.chat_message("assistant"):
+
+            st.markdown(answer)
+
     else:
 
-        # ----------------------------------------------------
-        # EMBED USER QUESTION
-        # ----------------------------------------------------
-
-        query_embedding = embedding_model.encode(
-            question
-        ).tolist()
-
-
-        # ----------------------------------------------------
-        # RETRIEVE RELEVANT CHUNKS
-        # ----------------------------------------------------
+        query_embedding = (
+            embedding_model
+            .encode(question)
+            .tolist()
+        )
 
         number_of_results = min(
             4,
@@ -373,28 +545,19 @@ if question:
         )
 
         results = collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=[
+                query_embedding
+            ],
             n_results=number_of_results
         )
-
 
         documents = results["documents"][0]
 
         metadatas = results["metadatas"][0]
 
-
-        # ----------------------------------------------------
-        # BUILD CONTEXT
-        # ----------------------------------------------------
-
         context = "\n\n---\n\n".join(
             documents
         )
-
-
-        # ----------------------------------------------------
-        # SOURCE NAMES
-        # ----------------------------------------------------
 
         sources = sorted(
             set(
@@ -403,30 +566,23 @@ if question:
             )
         )
 
-
-        # ----------------------------------------------------
-        # RAG PROMPT
-        # ----------------------------------------------------
-
         prompt = f"""
-You are TravelMate AI, a helpful travel information
-assistant.
+You are TravelMate AI, a helpful travel information assistant.
 
-Your job is to answer the user's question using ONLY
-the information contained in the provided context.
+Answer the user's question using ONLY the information
+contained in the provided document context.
 
-IMPORTANT RULES:
+IMPORTANT:
 
 1. Do not invent facts.
-2. Do not make up flight schedules.
-3. Do not make up hotel prices.
-4. Do not make up travel policies.
-5. If the answer is not contained in the context,
-   clearly say that the information is not available
-   in the uploaded travel documents.
-6. Keep the answer clear and useful.
-7. If several relevant options exist, organize them
-   using bullet points or a small table.
+2. Do not invent flight schedules.
+3. Do not invent prices.
+4. Do not invent hotel information.
+5. Do not invent travel policies.
+6. If the answer is not contained in the context,
+   say that the information is not available in
+   the uploaded travel documents.
+7. Keep the answer clear and useful.
 
 DOCUMENT CONTEXT:
 
@@ -437,24 +593,18 @@ USER QUESTION:
 {question}
 """
 
-
-        # ----------------------------------------------------
-        # GROQ
-        # ----------------------------------------------------
-
         try:
 
-            response = client.chat.completions.create(
+            response = groq_client.chat.completions.create(
 
                 model="openai/gpt-oss-20b",
 
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "You are TravelMate AI. "
-                            "Answer only from the supplied context."
-                        )
+                        "content":
+                        "You are TravelMate AI. "
+                        "Answer only from the supplied context."
                     },
                     {
                         "role": "user",
@@ -467,40 +617,37 @@ USER QUESTION:
                 max_tokens=800
             )
 
-            answer = response.choices[0].message.content
+            answer = (
+                response
+                .choices[0]
+                .message
+                .content
+            )
 
         except Exception as e:
 
             answer = (
-                f"⚠️ I couldn't generate an answer right now.\n\n"
+                "⚠️ I couldn't generate an answer right now.\n\n"
                 f"Error: `{e}`"
             )
 
             sources = []
 
+        with st.chat_message("assistant"):
 
-    # --------------------------------------------------------
-    # DISPLAY ASSISTANT RESPONSE
-    # --------------------------------------------------------
+            st.markdown(answer)
 
-    with st.chat_message("assistant"):
+            if sources:
 
-        st.markdown(answer)
+                with st.expander(
+                    "📚 Sources used"
+                ):
 
-        if sources:
+                    for source in sources:
 
-            with st.expander("📚 Sources used"):
-
-                for source in sources:
-
-                    st.caption(
-                        f"📄 {source}"
-                    )
-
-
-    # --------------------------------------------------------
-    # SAVE ASSISTANT MESSAGE
-    # --------------------------------------------------------
+                        st.caption(
+                            f"📄 {source}"
+                        )
 
     st.session_state.messages.append(
         {
