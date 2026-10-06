@@ -8,7 +8,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 # =========================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # =========================================================
 
 st.set_page_config(
@@ -22,7 +22,8 @@ st.set_page_config(
 # CUSTOM CSS
 # =========================================================
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 
 .main {
@@ -65,6 +66,7 @@ st.markdown("""
 .info-card h3 {
     color: #FFFFFF !important;
     font-size: 24px;
+    margin-bottom: 10px;
 }
 
 .info-card p {
@@ -82,13 +84,13 @@ st.markdown("""
     color: #FFFFFF !important;
     margin-bottom: 18px;
     border: 1px solid #3B5685;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.20);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.20);
 }
 
 .flight-card h3 {
     color: #FFFFFF !important;
     font-size: 22px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
 .flight-card p {
@@ -108,17 +110,6 @@ st.markdown("""
 }
 
 
-/* ================= SECTION TITLE ================= */
-
-.section-title {
-    color: #FFFFFF !important;
-    font-size: 28px;
-    font-weight: 700;
-    margin-top: 15px;
-    margin-bottom: 15px;
-}
-
-
 /* ================= STATUS BADGE ================= */
 
 .status-badge {
@@ -131,10 +122,14 @@ st.markdown("""
 }
 
 
-/* ================= CHAT ================= */
+/* ================= SECTION TITLE ================= */
 
-[data-testid="stChatMessage"] {
-    border-radius: 14px;
+.section-title {
+    color: #FFFFFF !important;
+    font-size: 28px;
+    font-weight: 700;
+    margin-top: 15px;
+    margin-bottom: 15px;
 }
 
 
@@ -148,25 +143,32 @@ section[data-testid="stSidebar"] * {
     color: #FFFFFF;
 }
 
+
+/* ================= CHAT ================= */
+
+[data-testid="stChatMessage"] {
+    border-radius: 14px;
+}
+
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
 
 # =========================================================
-# HEADER
+# HERO HEADER
 # =========================================================
 
-st.markdown("""
+st.markdown(
+    """
 <div class="hero">
-
 <h1>✈️ TravelMate AI</h1>
-
-<p>
-Your intelligent travel knowledge assistant
-</p>
-
+<p>Your intelligent travel knowledge assistant</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
 
 # =========================================================
@@ -191,13 +193,17 @@ except Exception:
     st.stop()
 
 
+# =========================================================
+# GROQ CLIENT
+# =========================================================
+
 groq_client = Groq(
     api_key=groq_api_key
 )
 
 
 # =========================================================
-# EMBEDDING MODEL
+# HUGGING FACE EMBEDDING MODEL
 # =========================================================
 
 @st.cache_resource
@@ -212,7 +218,7 @@ embedding_model = load_embedding_model()
 
 
 # =========================================================
-# CHROMA DATABASE
+# CHROMADB
 # =========================================================
 
 @st.cache_resource
@@ -241,6 +247,17 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 
 # =========================================================
+# SESSION STATE
+# =========================================================
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "show_flights" not in st.session_state:
+    st.session_state.show_flights = False
+
+
+# =========================================================
 # LIVE FLIGHT API
 # =========================================================
 
@@ -266,13 +283,11 @@ def get_live_flights():
 
         if "error" in data:
 
-            error_message = data["error"].get(
-                "message",
-                "Aviationstack returned an error."
-            )
-
             return {
-                "error": error_message
+                "error": data["error"].get(
+                    "message",
+                    "Aviationstack returned an error."
+                )
             }
 
         return data
@@ -280,18 +295,23 @@ def get_live_flights():
     except requests.RequestException as e:
 
         return {
-            "error": f"Could not connect to flight API: {e}"
+            "error": (
+                "Could not connect to the "
+                f"flight API: {e}"
+            )
         }
 
     except Exception as e:
 
         return {
-            "error": f"Unexpected API error: {e}"
+            "error": (
+                f"Unexpected API error: {e}"
+            )
         }
 
 
 # =========================================================
-# DISPLAY FLIGHTS
+# DISPLAY LIVE FLIGHTS
 # =========================================================
 
 def display_live_flights():
@@ -301,6 +321,10 @@ def display_live_flights():
         '✈️ Live Lahore → Dubai Flights'
         '</div>',
         unsafe_allow_html=True
+    )
+
+    st.caption(
+        "🌐 Live flight information provided by Aviationstack."
     )
 
     with st.spinner(
@@ -322,13 +346,17 @@ def display_live_flights():
         return
 
     # -----------------------------
-    # FLIGHT DATA
+    # GET FLIGHTS
     # -----------------------------
 
     flights = data.get(
         "data",
         []
     )
+
+    # -----------------------------
+    # NO FLIGHTS
+    # -----------------------------
 
     if not flights:
 
@@ -339,16 +367,23 @@ def display_live_flights():
 
         return
 
-    st.caption(
-        "🌐 Live flight information provided by "
-        "Aviationstack."
+    # -----------------------------
+    # FLIGHT COUNT
+    # -----------------------------
+
+    st.success(
+        f"Found {len(flights)} flight record(s)."
     )
 
-    # -----------------------------
-    # DISPLAY EACH FLIGHT
-    # -----------------------------
+    # =====================================================
+    # EACH FLIGHT
+    # =====================================================
 
     for flight in flights:
+
+        # -------------------------
+        # API OBJECTS
+        # -------------------------
 
         airline = flight.get(
             "airline",
@@ -370,19 +405,27 @@ def display_live_flights():
             {}
         )
 
+        # -------------------------
+        # STATUS
+        # -------------------------
+
         status = flight.get(
             "flight_status",
             "Unknown"
         )
 
-        # Airline
+        # -------------------------
+        # AIRLINE
+        # -------------------------
 
         airline_name = airline.get(
             "name",
             "Unknown airline"
         )
 
-        # Flight number
+        # -------------------------
+        # FLIGHT NUMBER
+        # -------------------------
 
         flight_number = flight_info.get(
             "iata"
@@ -395,7 +438,9 @@ def display_live_flights():
                 "Unknown"
             )
 
-        # Departure
+        # -------------------------
+        # DEPARTURE
+        # -------------------------
 
         departure_airport = departure.get(
             "airport",
@@ -422,7 +467,9 @@ def display_live_flights():
             "Not available"
         )
 
-        # Arrival
+        # -------------------------
+        # ARRIVAL
+        # -------------------------
 
         arrival_airport = arrival.get(
             "airport",
@@ -449,69 +496,67 @@ def display_live_flights():
             "Not available"
         )
 
-        # -----------------------------
-        # FLIGHT CARD
-        # -----------------------------
+        # =================================================
+        # CREATE FLIGHT CARD
+        # =================================================
+
+        flight_html = f"""
+<div class="flight-card">
+
+<h3>
+✈️ {airline_name} — Flight {flight_number}
+</h3>
+
+<p>
+<span class="status-badge">
+Status: {status}
+</span>
+</p>
+
+<hr>
+
+<p>
+🛫 <b>Departure Airport</b><br>
+{departure_airport} ({departure_iata})
+</p>
+
+<p>
+🕐 <b>Scheduled Departure</b><br>
+{departure_time}
+</p>
+
+<p>
+🚪 <b>Terminal:</b> {departure_terminal}
+&nbsp;&nbsp;&nbsp;
+<b>Gate:</b> {departure_gate}
+</p>
+
+<hr>
+
+<p>
+🛬 <b>Arrival Airport</b><br>
+{arrival_airport} ({arrival_iata})
+</p>
+
+<p>
+🕐 <b>Scheduled Arrival</b><br>
+{arrival_time}
+</p>
+
+<p>
+🚪 <b>Terminal:</b> {arrival_terminal}
+&nbsp;&nbsp;&nbsp;
+<b>Gate:</b> {arrival_gate}
+</p>
+
+</div>
+"""
+
+        # IMPORTANT:
+        # Render HTML as HTML, NOT Markdown/code.
 
         st.markdown(
-            f"""
-            <div class="flight-card">
-
-                <h3>
-                    ✈️ {airline_name}
-                    — Flight {flight_number}
-                </h3>
-
-                <p>
-                    <span class="status-badge">
-                        Status: {status}
-                    </span>
-                </p>
-
-                <hr>
-
-                <p>
-                    🛫 <b>Departure Airport</b><br>
-                    {departure_airport}
-                    ({departure_iata})
-                </p>
-
-                <p>
-                    🕐 <b>Scheduled Departure:</b><br>
-                    {departure_time}
-                </p>
-
-                <p>
-                    🚪 <b>Terminal:</b>
-                    {departure_terminal}
-                    &nbsp;&nbsp;&nbsp;
-                    <b>Gate:</b>
-                    {departure_gate}
-                </p>
-
-                <hr>
-
-                <p>
-                    🛬 <b>Arrival Airport</b><br>
-                    {arrival_airport}
-                    ({arrival_iata})
-                </p>
-
-                <p>
-                    🕐 <b>Scheduled Arrival:</b><br>
-                    {arrival_time}
-                </p>
-
-                <p>
-                    🚪 <b>Terminal:</b>
-                    {arrival_terminal}
-                    &nbsp;&nbsp;&nbsp;
-                    <b>Gate:</b>
-                    {arrival_gate}
-                </p>
-
-            </div>
-            """,
+            flight_html,
             unsafe_allow_html=True
         )
 
@@ -570,13 +615,10 @@ with st.sidebar:
 
 
 # =========================================================
-# FLIGHT RESULTS ON MAIN PAGE
+# LIVE FLIGHTS ON MAIN PAGE
 # =========================================================
 
-if st.session_state.get(
-    "show_flights",
-    False
-):
+if st.session_state.show_flights:
 
     display_live_flights()
 
@@ -593,6 +635,10 @@ if uploaded_files:
 
         file_name = uploaded_file.name
 
+        # -----------------------------
+        # CHECK IF ALREADY STORED
+        # -----------------------------
+
         existing = collection.get(
             where={
                 "source": file_name
@@ -600,9 +646,14 @@ if uploaded_files:
         )
 
         if existing["ids"]:
+
             continue
 
         try:
+
+            # -------------------------
+            # READ PDF
+            # -------------------------
 
             reader = PdfReader(
                 uploaded_file
@@ -621,6 +672,10 @@ if uploaded_files:
                         "\n"
                     )
 
+            # -------------------------
+            # CHECK TEXT
+            # -------------------------
+
             if not text.strip():
 
                 st.warning(
@@ -630,14 +685,30 @@ if uploaded_files:
 
                 continue
 
+            # -------------------------
+            # SPLIT TEXT
+            # -------------------------
+
             chunks = text_splitter.split_text(
                 text
             )
 
-            embeddings = embedding_model.encode(
-                chunks,
-                show_progress_bar=False
-            ).tolist()
+            # -------------------------
+            # CREATE EMBEDDINGS
+            # -------------------------
+
+            embeddings = (
+                embedding_model
+                .encode(
+                    chunks,
+                    show_progress_bar=False
+                )
+                .tolist()
+            )
+
+            # -------------------------
+            # CREATE IDS
+            # -------------------------
 
             ids = [
                 f"{file_name}_{i}"
@@ -645,6 +716,10 @@ if uploaded_files:
                     len(chunks)
                 )
             ]
+
+            # -------------------------
+            # METADATA
+            # -------------------------
 
             metadatas = [
                 {
@@ -655,6 +730,10 @@ if uploaded_files:
                     len(chunks)
                 )
             ]
+
+            # -------------------------
+            # STORE IN CHROMADB
+            # -------------------------
 
             collection.upsert(
                 ids=ids,
@@ -676,33 +755,27 @@ if uploaded_files:
 
 
 # =========================================================
-# CHAT HISTORY
-# =========================================================
-
-if "messages" not in st.session_state:
-
-    st.session_state.messages = []
-
-
-# =========================================================
 # WELCOME CARD
 # =========================================================
 
 if not st.session_state.messages:
 
-    st.markdown("""
-    <div class="info-card">
+    st.markdown(
+        """
+<div class="info-card">
 
-        <h3>👋 Welcome to TravelMate AI!</h3>
+<h3>👋 Welcome to TravelMate AI!</h3>
 
-        <p>
-        Ask questions about your uploaded travel
-        documents or check current Lahore → Dubai
-        flight information using the live flight API.
-        </p>
+<p>
+Ask questions about your uploaded travel documents
+or check current Lahore → Dubai flight information
+using the live flight API.
+</p>
 
-    </div>
-    """, unsafe_allow_html=True)
+</div>
+""",
+        unsafe_allow_html=True
+    )
 
 
 # =========================================================
@@ -747,7 +820,9 @@ question = st.chat_input(
 
 if question:
 
-    # Save user message
+    # =====================================================
+    # SAVE USER MESSAGE
+    # =====================================================
 
     st.session_state.messages.append(
         {
@@ -768,9 +843,7 @@ if question:
     # DETECT LIVE FLIGHT QUESTION
     # =====================================================
 
-    lower_question = (
-        question.lower()
-    )
+    lower_question = question.lower()
 
     live_flight_request = (
 
@@ -797,9 +870,8 @@ if question:
         )
     )
 
-
     # =====================================================
-    # LIVE FLIGHT ANSWER
+    # LIVE FLIGHT RESPONSE
     # =====================================================
 
     if live_flight_request:
@@ -811,8 +883,8 @@ if question:
             display_live_flights()
 
         answer = (
-            "I checked the live Lahore → Dubai "
-            "flight information using the "
+            "I checked the current Lahore → Dubai "
+            "flight information using the live "
             "Aviationstack API."
         )
 
@@ -820,9 +892,8 @@ if question:
             "Aviationstack Live Flight API"
         ]
 
-
     # =====================================================
-    # PDF RAG ANSWER
+    # RAG RESPONSE
     # =====================================================
 
     elif collection.count() == 0:
@@ -843,27 +914,28 @@ if question:
                 answer
             )
 
-
     else:
 
         # -----------------------------
-        # EMBED QUESTION
+        # CREATE QUERY EMBEDDING
         # -----------------------------
 
         query_embedding = (
             embedding_model
-            .encode(question)
+            .encode(
+                question
+            )
             .tolist()
-        )
-
-        number_of_results = min(
-            4,
-            collection.count()
         )
 
         # -----------------------------
         # RETRIEVE DOCUMENTS
         # -----------------------------
+
+        number_of_results = min(
+            4,
+            collection.count()
+        )
 
         results = collection.query(
             query_embeddings=[
@@ -880,10 +952,18 @@ if question:
             "metadatas"
         ][0]
 
+        # -----------------------------
+        # CREATE CONTEXT
+        # -----------------------------
+
         context = (
             "\n\n---\n\n"
             .join(documents)
         )
+
+        # -----------------------------
+        # SOURCES
+        # -----------------------------
 
         sources = sorted(
             set(
@@ -897,7 +977,6 @@ if question:
         # -----------------------------
 
         prompt = f"""
-
 You are TravelMate AI, a helpful travel
 information assistant.
 
@@ -908,20 +987,14 @@ document context.
 IMPORTANT RULES:
 
 1. Do not invent facts.
-
 2. Do not invent flight schedules.
-
 3. Do not invent prices.
-
 4. Do not invent hotel information.
-
 5. Do not invent travel policies.
-
 6. If the answer is not contained in
 the context, clearly say that the
 information is not available in the
 uploaded travel documents.
-
 7. Keep the answer clear and useful.
 
 DOCUMENT CONTEXT:
@@ -931,7 +1004,6 @@ DOCUMENT CONTEXT:
 USER QUESTION:
 
 {question}
-
 """
 
         try:
@@ -945,7 +1017,6 @@ USER QUESTION:
                     model="openai/gpt-oss-20b",
 
                     messages=[
-
                         {
                             "role": "system",
                             "content":
@@ -953,12 +1024,10 @@ USER QUESTION:
                             "Answer only from the "
                             "supplied context."
                         },
-
                         {
                             "role": "user",
                             "content": prompt
                         }
-
                     ],
 
                     temperature=0.2,
@@ -985,7 +1054,7 @@ USER QUESTION:
             sources = []
 
         # -----------------------------
-        # SHOW ANSWER
+        # DISPLAY RAG ANSWER
         # -----------------------------
 
         with st.chat_message(
@@ -1007,7 +1076,6 @@ USER QUESTION:
                         st.caption(
                             f"📄 {source}"
                         )
-
 
     # =====================================================
     # SAVE ASSISTANT MESSAGE
